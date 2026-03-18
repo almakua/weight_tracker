@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+{% block title %}Importa dati — Weight Tracker{% endblock %}
+
+{% block body %}
+
+<!-- Navbar -->
+<nav class="bg-white border-b border-slate-100 sticky top-0 z-10 shadow-sm">
+  <div class="max-w-3xl mx-auto px-4 h-14 flex items-center gap-3">
+    <a href="/dashboard" class="p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition" title="Torna alla dashboard">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+      </svg>
+    </a>
+    <span class="font-bold text-slate-900">Importa dati storici</span>
+    <span class="text-slate-400 text-sm ml-auto hidden sm:inline">@{{ user.username }}</span>
+  </div>
+</nav>
+
+<main class="max-w-3xl mx-auto px-4 py-6 space-y-5">
+
+  <!-- Source selector card -->
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+
+    <!-- Tab switcher -->
+    <div class="flex bg-slate-100 p-1 rounded-xl mb-6 gap-1">
+      <button onclick="switchTab('csv')"    id="tab-csv"    class="tab-btn flex-1 py-2 text-sm font-medium rounded-lg transition">📄 CSV</button>
+      <button onclick="switchTab('json')"   id="tab-json"   class="tab-btn flex-1 py-2 text-sm font-medium rounded-lg transition">{ } JSON</button>
+      <button onclick="switchTab('manual')" id="tab-manual" class="tab-btn flex-1 py-2 text-sm font-medium rounded-lg transition">✏️ Manuale</button>
+    </div>
+
+    <!-- CSV panel -->
+    <div id="panel-csv">
+      <p class="text-xs text-slate-500 mb-4">
+        Carica un file <strong>.csv</strong> con almeno due colonne.
+        Intestazioni supportate: <code class="bg-slate-100 px-1 rounded">data</code> / <code class="bg-slate-100 px-1 rounded">date</code>
+        e <code class="bg-slate-100 px-1 rounded">peso_kg</code> / <code class="bg-slate-100 px-1 rounded">weight</code> / <code class="bg-slate-100 px-1 rounded">peso</code>.
+      </p>
+      <div id="dropzone-csv"
+           class="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:border-brand-400 hover:bg-brand-50/30 transition-colors">
+        <input type="file" id="file-csv" accept=".csv,.txt" class="hidden" />
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+        </svg>
+        <p class="text-sm text-slate-500">Trascina il file qui oppure <span class="text-brand-600 font-medium">clicca per sfogliare</span></p>
+        <p id="file-csv-name" class="text-xs text-brand-600 font-medium mt-2"></p>
+      </div>
+      <button onclick="analyze('csv')"
+        class="mt-4 w-full py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition shadow-sm text-sm">
+        Analizza file
+      </button>
+    </div>
+
+    <!-- JSON panel -->
+    <div id="panel-json" class="hidden">
+      <p class="text-xs text-slate-500 mb-4">
+        Carica un file <strong>.json</strong> contenente un array di oggetti.
+        Campi supportati: <code class="bg-slate-100 px-1 rounded">data</code> / <code class="bg-slate-100 px-1 rounded">date</code>
+        e <code class="bg-slate-100 px-1 rounded">peso_kg</code> / <code class="bg-slate-100 px-1 rounded">weight</code> / <code class="bg-slate-100 px-1 rounded">peso</code>.
+      </p>
+      <div class="mb-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+        <p class="text-xs text-slate-400 font-mono">[{"data": "2025-01-15", "peso_kg": 80.5}, ...]</p>
+      </div>
+      <div id="dropzone-json"
+           class="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:border-brand-400 hover:bg-brand-50/30 transition-colors">
+        <input type="file" id="file-json" accept=".json" class="hidden" />
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+        </svg>
+        <p class="text-sm text-slate-500">Trascina il file qui oppure <span class="text-brand-600 font-medium">clicca per sfogliare</span></p>
+        <p id="file-json-name" class="text-xs text-brand-600 font-medium mt-2"></p>
+      </div>
+      <button onclick="analyze('json')"
+        class="mt-4 w-full py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition shadow-sm text-sm">
+        Analizza file
+      </button>
+    </div>
+
+    <!-- Manual panel -->
+    <div id="panel-manual" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-xs text-slate-500">Inserisci le misurazioni passate una per riga. Formato data: <code class="bg-slate-100 px-1 rounded">YYYY-MM-DD</code> o <code class="bg-slate-100 px-1 rounded">GG/MM/AAAA</code>.</p>
+        <button onclick="addManualRow()"
+          class="ml-3 shrink-0 flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700 px-2.5 py-1.5 rounded-lg border border-brand-200 hover:border-brand-300 transition">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          Riga
+        </button>
+      </div>
+      <!-- Header -->
+      <div class="grid gap-2 px-1 mb-1 text-xs font-semibold text-slate-400 uppercase tracking-wide" style="grid-template-columns:1fr 1fr 2rem">
+        <span>Data</span><span>Peso</span><span></span>
+      </div>
+      <div id="manual-rows" class="space-y-2 max-h-72 overflow-y-auto pr-1"></div>
+      <button onclick="analyze('manual')"
+        class="mt-4 w-full py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition shadow-sm text-sm">
+        Analizza misurazioni
+      </button>
+    </div>
+
+  </div>
+
+  <!-- Preview card (hidden until analyze) -->
+  <div id="preview-section" class="hidden bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+
+    <!-- Parse errors -->
+    <div id="errors-section" class="hidden mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+      <p class="text-xs font-semibold text-amber-700 mb-1.5">⚠️ Righe non importabili</p>
+      <ul id="errors-list" class="text-xs text-amber-700 space-y-0.5 list-disc list-inside"></ul>
+    </div>
+
+    <!-- Summary bar -->
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div>
+        <p class="text-sm font-semibold text-slate-800">
+          <span id="preview-total">0</span> misurazioni trovate
+        </p>
+        <p class="text-xs text-slate-400 mt-0.5">
+          <span class="text-emerald-600 font-medium" id="preview-new">0</span> nuove &nbsp;·&nbsp;
+          <span class="text-amber-600 font-medium" id="preview-conflicts">0</span> conflitti
+        </p>
+      </div>
+      <div id="bulk-actions" class="hidden flex gap-2">
+        <button onclick="setAllConflicts('overwrite')"
+          class="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 transition">
+          Sovrascrivi tutti i conflitti
+        </button>
+        <button onclick="setAllConflicts('skip')"
+          class="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 transition">
+          Salta tutti i conflitti
+        </button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="overflow-x-auto rounded-xl border border-slate-100">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-xs text-slate-500 bg-slate-50 border-b border-slate-100">
+            <th class="px-3 py-2 text-left font-semibold">Data</th>
+            <th class="px-3 py-2 text-right font-semibold">Da importare</th>
+            <th class="px-3 py-2 text-right font-semibold">Esistente</th>
+            <th class="px-3 py-2 text-center font-semibold">Azione</th>
+          </tr>
+        </thead>
+        <tbody id="preview-tbody"></tbody>
+      </table>
+    </div>
+
+    <button onclick="confirmImport()" id="import-btn"
+      class="mt-4 w-full py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition shadow-sm text-sm">
+      Importa
+    </button>
+  </div>
+
+  <!-- Result card (hidden until confirm) -->
+  <div id="result-section" class="hidden bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center">
+    <div class="text-5xl mb-4">✅</div>
+    <p class="text-lg font-bold text-slate-800">
+      <span id="result-imported">0</span> misurazioni importate
+    </p>
+    <p class="text-sm text-slate-400 mt-1">
+      <span id="result-skipped">0</span> saltate
+    </p>
+    <a href="/dashboard"
+      class="mt-5 inline-block px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition shadow-sm text-sm">
+      Vai alla dashboard
+    </a>
+    <button onclick="resetForm()"
+      class="mt-3 block w-full text-center text-sm text-slate-400 hover:text-slate-600 transition py-1">
+      Importa altri dati
+    </button>
+  </div>
+
+</main>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+let previewRows = [];
+let rowCount    = 0;
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  ['csv', 'json', 'manual'].forEach(t => {
+    document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== tab);
+    const btn = document.getElementById(`tab-${t}`);
+    if (t === tab) {
+      btn.classList.add('bg-white', 'shadow-sm', 'text-slate-900');
+      btn.classList.remove('text-slate-500');
+    } else {
+      btn.classList.remove('bg-white', 'shadow-sm', 'text-slate-900');
+      btn.classList.add('text-slate-500');
+    }
+  });
+}
+
+// ── Dropzones ─────────────────────────────────────────────────────────────
+['csv', 'json'].forEach(type => {
+  const dz = document.getElementById(`dropzone-${type}`);
+  const fi = document.getElementById(`file-${type}`);
+  const nm = document.getElementById(`file-${type}-name`);
+
+  dz.addEventListener('click', () => fi.click());
+
+  dz.addEventListener('dragover', e => {
+    e.preventDefault();
+    dz.classList.add('border-brand-400', 'bg-brand-50/50');
+  });
+  dz.addEventListener('dragleave', () => {
+    dz.classList.remove('border-brand-400', 'bg-brand-50/50');
+  });
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('border-brand-400', 'bg-brand-50/50');
+    const f = e.dataTransfer.files[0];
+    if (f) { fi._file = f; nm.textContent = '📎 ' + f.name; }
+  });
+  fi.addEventListener('change', () => {
+    if (fi.files[0]) nm.textContent = '📎 ' + fi.files[0].name;
+  });
+});
+
+// ── Manual rows ───────────────────────────────────────────────────────────
+function addManualRow(date = '', weight = '') {
+  const id  = ++rowCount;
+  const def = date || new Date().toISOString().split('T')[0];
+  const el  = document.createElement('div');
+  el.id        = `mrow-${id}`;
+  el.className = 'grid gap-2 items-center';
+  el.style.gridTemplateColumns = '1fr 1fr 2rem';
+  el.innerHTML = `
+    <input type="text" value="${def}" placeholder="YYYY-MM-DD"
+      class="px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm transition" />
+    <div class="relative">
+      <input type="number" step="0.1" min="10" max="699" value="${weight}" placeholder="es. 75.5"
+        class="w-full px-3 py-2 pr-8 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm transition" />
+      <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">kg</span>
+    </div>
+    <button onclick="document.getElementById('mrow-${id}').remove()"
+      class="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-400 transition">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>`;
+  document.getElementById('manual-rows').appendChild(el);
+}
+
+// ── Analyze ───────────────────────────────────────────────────────────────
+async function analyze(source) {
+  const fd = new FormData();
+  fd.append('source', source);
+
+  if (source === 'csv') {
+    const fi = document.getElementById('file-csv');
+    const f  = fi._file || fi.files[0];
+    if (!f) { alert('Seleziona un file CSV prima di procedere.'); return; }
+    fd.append('file', f);
+  } else if (source === 'json') {
+    const fi = document.getElementById('file-json');
+    const f  = fi._file || fi.files[0];
+    if (!f) { alert('Seleziona un file JSON prima di procedere.'); return; }
+    fd.append('file', f);
+  } else {
+    const rows = [];
+    document.querySelectorAll('#manual-rows > div').forEach(div => {
+      const ins = div.querySelectorAll('input');
+      rows.push({ date: ins[0].value.trim(), weight: ins[1].value.trim() });
+    });
+    if (rows.length === 0) { alert('Aggiungi almeno una riga.'); return; }
+    fd.append('rows', JSON.stringify(rows));
+  }
+
+  const btn = document.querySelector(`#panel-${source} button[onclick="analyze('${source}')"]`);
+  btn.disabled    = true;
+  btn.textContent = 'Analisi in corso…';
+
+  try {
+    const res = await fetch('/api/import/preview', { method: 'POST', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Errore server ${res.status}`);
+    }
+    renderPreview(await res.json());
+  } catch (e) {
+    alert('Errore durante l\'analisi: ' + e.message);
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = source === 'manual' ? 'Analizza misurazioni' : 'Analizza file';
+  }
+}
+
+// ── Render preview ────────────────────────────────────────────────────────
+function renderPreview(data) {
+  previewRows = data.rows.map(r => ({ ...r, _action: r.conflict ? 'overwrite' : 'import' }));
+
+  // Errors
+  const errSec = document.getElementById('errors-section');
+  if (data.errors.length) {
+    document.getElementById('errors-list').innerHTML =
+      data.errors.map(e => `<li>${e}</li>`).join('');
+    errSec.classList.remove('hidden');
+  } else {
+    errSec.classList.add('hidden');
+  }
+
+  // Summary
+  document.getElementById('preview-total').textContent     = data.total;
+  document.getElementById('preview-new').textContent       = data.total - data.conflicts;
+  document.getElementById('preview-conflicts').textContent = data.conflicts;
+
+  // Bulk actions only if there are conflicts
+  document.getElementById('bulk-actions').classList.toggle('hidden', data.conflicts === 0);
+
+  // Table
+  document.getElementById('preview-tbody').innerHTML = previewRows.map((row, i) => {
+    const d   = new Date(row.date + 'T12:00:00');
+    const lbl = d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
+    if (row.conflict) {
+      return `
+        <tr id="prow-${i}" class="border-t border-slate-100 bg-amber-50/40">
+          <td class="px-3 py-2.5 text-sm text-slate-700 font-medium">${lbl}</td>
+          <td class="px-3 py-2.5 text-sm text-right font-semibold text-slate-800">${row.weight} kg</td>
+          <td class="px-3 py-2.5 text-sm text-right text-slate-500">${row.existing_weight} kg</td>
+          <td class="px-3 py-2.5 text-center">
+            <div class="inline-flex rounded-lg border border-amber-200 overflow-hidden text-xs font-semibold">
+              <button id="btn-${i}-overwrite" onclick="setRowAction(${i},'overwrite')"
+                class="px-2.5 py-1 transition">Sovrascrivi</button>
+              <button id="btn-${i}-skip" onclick="setRowAction(${i},'skip')"
+                class="px-2.5 py-1 transition">Salta</button>
+            </div>
+          </td>
+        </tr>`;
+    }
+    return `
+      <tr class="border-t border-slate-100">
+        <td class="px-3 py-2.5 text-sm text-slate-700">${lbl}</td>
+        <td class="px-3 py-2.5 text-sm text-right font-medium text-slate-800">${row.weight} kg</td>
+        <td class="px-3 py-2.5 text-sm text-right text-slate-300">—</td>
+        <td class="px-3 py-2.5 text-center">
+          <span class="inline-block px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full">Nuovo</span>
+        </td>
+      </tr>`;
+  }).join('');
+
+  // Style conflict buttons
+  previewRows.forEach((row, i) => {
+    if (row.conflict) applyConflictStyle(i, row._action);
+  });
+
+  // Update import button label
+  const importable = previewRows.filter(r => r._action !== 'skip').length;
+  document.getElementById('import-btn').textContent = `Importa ${importable} misurazione${importable !== 1 ? 'i' : ''}`;
+
+  document.getElementById('preview-section').classList.remove('hidden');
+  document.getElementById('result-section').classList.add('hidden');
+  setTimeout(() => document.getElementById('preview-section').scrollIntoView({ behavior: 'smooth' }), 50);
+}
+
+function applyConflictStyle(i, action) {
+  const over = document.getElementById(`btn-${i}-overwrite`);
+  const skip = document.getElementById(`btn-${i}-skip`);
+  if (!over) return;
+  if (action === 'overwrite') {
+    over.className = 'px-2.5 py-1 transition bg-amber-400 text-white';
+    skip.className = 'px-2.5 py-1 transition text-amber-600 bg-white hover:bg-amber-50';
+  } else {
+    skip.className = 'px-2.5 py-1 transition bg-slate-400 text-white';
+    over.className = 'px-2.5 py-1 transition text-amber-600 bg-white hover:bg-amber-50';
+  }
+}
+
+function setRowAction(i, action) {
+  previewRows[i]._action = action;
+  applyConflictStyle(i, action);
+  const importable = previewRows.filter(r => r._action !== 'skip').length;
+  document.getElementById('import-btn').textContent = `Importa ${importable} misurazione${importable !== 1 ? 'i' : ''}`;
+}
+
+function setAllConflicts(action) {
+  previewRows.forEach((row, i) => { if (row.conflict) setRowAction(i, action); });
+}
+
+// ── Confirm import ────────────────────────────────────────────────────────
+async function confirmImport() {
+  const rows = previewRows.map(r => ({
+    date:   r.date,
+    weight: r.weight,
+    action: r._action,
+  }));
+
+  const btn = document.getElementById('import-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Importazione in corso…';
+
+  try {
+    const res = await fetch('/api/import/confirm', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ rows }),
+    });
+    if (!res.ok) throw new Error(`Errore server ${res.status}`);
+    const data = await res.json();
+    document.getElementById('result-imported').textContent = data.imported;
+    document.getElementById('result-skipped').textContent  = data.skipped;
+    document.getElementById('preview-section').classList.add('hidden');
+    document.getElementById('result-section').classList.remove('hidden');
+    document.getElementById('result-section').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) {
+    alert('Errore durante l\'importazione: ' + e.message);
+    btn.disabled    = false;
+    btn.textContent = 'Importa';
+  }
+}
+
+// ── Reset ─────────────────────────────────────────────────────────────────
+function resetForm() {
+  previewRows = [];
+  document.getElementById('preview-section').classList.add('hidden');
+  document.getElementById('result-section').classList.add('hidden');
+  document.getElementById('file-csv-name').textContent  = '';
+  document.getElementById('file-json-name').textContent = '';
+  document.getElementById('manual-rows').innerHTML = '';
+  rowCount = 0;
+  for (let i = 0; i < 3; i++) addManualRow();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  switchTab('csv');
+  for (let i = 0; i < 3; i++) addManualRow();
+});
+</script>
+
+{% endblock %}

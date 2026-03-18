@@ -1,9 +1,10 @@
 import csv
 import io
+import json as json_lib
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import FastAPI, Depends, Request, Form, HTTPException
+from fastapi import FastAPI, Depends, Request, Form, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -258,6 +259,14 @@ async def api_delete_weight(weight_id: int, request: Request, db: Session = Depe
     return {"ok": True}
 
 
+@app.get("/import", response_class=HTMLResponse)
+async def import_page(request: Request, db: Session = Depends(get_db)):
+    user = current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    return templates.TemplateResponse("import.html", {"request": request, "user": user})
+
+
 @app.get("/api/export/csv")
 async def api_export_csv(request: Request, db: Session = Depends(get_db)):
     user = current_user(request, db)
@@ -284,3 +293,172 @@ async def api_export_csv(request: Request, db: Session = Depends(get_db)):
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Import helpers
+# ---------------------------------------------------------------------------
+
+def parse_date_flexible(s: str) -> Optional[datetime]:
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S"):
+        try:
+            return datetime.strptime(s.strip(), fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_weight(raw: str) -> Optional[float]:
+    try:
+        w = round(float(str(raw).replace(",", ".")), 2)
+        return w if 10 < w < 700 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _existing_for_day(user_id: int, dt: datetime, db: Session) -> Optional[Weight]:
+    day_start = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end   = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return (
+        db.query(Weight)
+        .filter(Weight.user_id == user_id, Weight.recorded_at >= day_start, Weight.recorded_at <= day_end)
+        .first()
+    )
+
+
+@app.post("/api/import/preview")
+async def api_import_preview(
+    request: Request,
+    source: str = Form(...),
+    file: Optional[UploadFile] = File(None),
+    rows: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    user = current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401)
+
+    parsed: list[dict] = []
+    errors: list[str] = []
+
+    if source == "csv":
+        if not file:
+            raise HTTPException(status_code=422, detail="File mancante")
+        content = (await file.read()).decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(content))
+        for i, row in enumerate(reader, 1):
+            date_val   = next((row[k] for k in ("data", "date", "Data", "Date") if k in row), None)
+            weight_val = next((row[k] for k in ("peso_kg", "weight", "peso", "Weight", "Peso") if k in row), None)
+            if date_val is None or weight_val is None:
+                errors.append(f"Riga {i}: colonne non riconosciute ({list(row.keys())})")
+                continue
+            dt = parse_date_flexible(date_val)
+            if not dt:
+                errors.append(f"Riga {i}: data non valida '{date_val}'")
+                continue
+            w = _parse_weight(weight_val)
+            if w is None:
+                errors.append(f"Riga {i}: peso non valido '{weight_val}'")
+                continue
+            parsed.append({"date": dt.strftime("%Y-%m-%d"), "weight": w})
+
+    elif source == "json":
+        if not file:
+            raise HTTPException(status_code=422, detail="File mancante")
+        content = (await file.read()).decode("utf-8")
+        try:
+            data = json_lib.loads(content)
+            if not isinstance(data, list):
+                raise ValueError("Il JSON deve essere un array")
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        for i, item in enumerate(data, 1):
+            date_val   = item.get("data") or item.get("date")
+            weight_val = item.get("peso_kg") or item.get("weight") or item.get("peso")
+            if date_val is None or weight_val is None:
+                errors.append(f"Elemento {i}: campi data/peso mancanti")
+                continue
+            dt = parse_date_flexible(str(date_val))
+            if not dt:
+                errors.append(f"Elemento {i}: data non valida '{date_val}'")
+                continue
+            w = _parse_weight(weight_val)
+            if w is None:
+                errors.append(f"Elemento {i}: peso non valido '{weight_val}'")
+                continue
+            parsed.append({"date": dt.strftime("%Y-%m-%d"), "weight": w})
+
+    elif source == "manual":
+        if not rows:
+            raise HTTPException(status_code=422, detail="Dati mancanti")
+        try:
+            manual = json_lib.loads(rows)
+        except Exception:
+            raise HTTPException(status_code=422, detail="Formato JSON non valido")
+        for i, item in enumerate(manual, 1):
+            date_val   = str(item.get("date", "")).strip()
+            weight_val = str(item.get("weight", "")).strip()
+            if not date_val and not weight_val:
+                continue
+            dt = parse_date_flexible(date_val)
+            if not dt:
+                errors.append(f"Riga {i}: data non valida '{date_val}'")
+                continue
+            w = _parse_weight(weight_val)
+            if w is None:
+                errors.append(f"Riga {i}: peso non valido '{weight_val}'")
+                continue
+            parsed.append({"date": dt.strftime("%Y-%m-%d"), "weight": w})
+    else:
+        raise HTTPException(status_code=422, detail="Source non valida")
+
+    # Deduplicate by date (last wins)
+    deduped = {r["date"]: r["weight"] for r in parsed}
+    parsed = [{"date": d, "weight": w} for d, w in sorted(deduped.items())]
+
+    # Check conflicts
+    result_rows = []
+    for row in parsed:
+        dt = datetime.strptime(row["date"], "%Y-%m-%d")
+        existing = _existing_for_day(user.id, dt, db)
+        result_rows.append({
+            "date": row["date"],
+            "weight": row["weight"],
+            "conflict": existing is not None,
+            "existing_weight": existing.weight if existing else None,
+            "existing_id": existing.id if existing else None,
+        })
+
+    return {
+        "rows": result_rows,
+        "errors": errors,
+        "total": len(result_rows),
+        "conflicts": sum(1 for r in result_rows if r["conflict"]),
+    }
+
+
+@app.post("/api/import/confirm")
+async def api_import_confirm(request: Request, db: Session = Depends(get_db)):
+    user = current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401)
+
+    body  = await request.json()
+    rows  = body.get("rows", [])
+    imported = skipped = 0
+
+    for row in rows:
+        if row.get("action") == "skip":
+            skipped += 1
+            continue
+        dt  = datetime.strptime(row["date"], "%Y-%m-%d")
+        w   = round(float(row["weight"]), 2)
+        existing = _existing_for_day(user.id, dt, db)
+        if existing:
+            existing.weight = w
+        else:
+            db.add(Weight(user_id=user.id, weight=w, recorded_at=dt.replace(hour=12, minute=0, second=0)))
+        imported += 1
+
+    db.commit()
+    return {"imported": imported, "skipped": skipped}
