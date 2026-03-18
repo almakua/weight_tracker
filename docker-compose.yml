@@ -1,0 +1,19 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - weight_data:/data
+    environment:
+      # IMPORTANT: change SECRET_KEY before deploying to production
+      - SECRET_KEY=change-this-secret-in-production
+      # Optionally point to a different DB path:
+      # - DATABASE_URL=sqlite:////data/weight_tracker.db
+    restart: unless-stopped
+
+volumes:
+  weight_data:
+
+# NOTE: for internet-facing deployments, put this behind a reverse proxy
+# (e.g. nginx/traefik) that handles TLS termination.

@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Weight Tracker{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+{% endblock %}
+
+{% block body %}
+
+<!-- Navbar -->
+<nav class="bg-white border-b border-slate-100 sticky top-0 z-10 shadow-sm">
+  <div class="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="text-xl">⚖️</span>
+      <span class="font-bold text-slate-900 text-base">Weight Tracker</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-sm text-slate-500 hidden sm:inline">@{{ user.username }}</span>
+      <a href="/settings" title="Impostazioni"
+         class="p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </a>
+      <form method="post" action="/logout">
+        <button type="submit" title="Esci"
+          class="p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </button>
+      </form>
+    </div>
+  </div>
+</nav>
+
+<main class="max-w-3xl mx-auto px-4 py-6 space-y-5">
+
+  <!-- Add weight card -->
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+    <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Registra peso</h2>
+    <div class="flex gap-3">
+      <div class="relative flex-1">
+        <input type="number" id="weightInput" step="0.1" min="10" max="699"
+          placeholder="es. 75.5"
+          class="w-full px-4 py-3 pr-10 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-base transition" />
+        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium pointer-events-none">kg</span>
+      </div>
+      <button onclick="addWeight()"
+        class="px-5 py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition shadow-sm text-sm whitespace-nowrap">
+        + Aggiungi
+      </button>
+    </div>
+    <p id="addError" class="text-red-500 text-xs mt-2 hidden"></p>
+  </div>
+
+  <!-- Chart card -->
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+
+    <!-- Period selector -->
+    <div class="flex items-center justify-between mb-4 gap-2 flex-wrap">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide">Andamento</h2>
+      <div class="flex gap-1" id="periodBtns">
+        <button data-days="7"   onclick="setPeriod(7)"   class="period-btn px-3 py-1.5 rounded-lg text-xs font-medium transition">1S</button>
+        <button data-days="30"  onclick="setPeriod(30)"  class="period-btn px-3 py-1.5 rounded-lg text-xs font-medium transition">1M</button>
+        <button data-days="90"  onclick="setPeriod(90)"  class="period-btn px-3 py-1.5 rounded-lg text-xs font-medium transition">3M</button>
+        <button data-days="180" onclick="setPeriod(180)" class="period-btn px-3 py-1.5 rounded-lg text-xs font-medium transition">6M</button>
+        <button data-days="365" onclick="setPeriod(365)" class="period-btn px-3 py-1.5 rounded-lg text-xs font-medium transition">1A</button>
+        <button data-days="0"   onclick="setPeriod(0)"   class="period-btn px-3 py-1.5 rounded-lg text-xs font-medium transition">Tutto</button>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="relative" style="height: 300px;">
+      <canvas id="weightChart"></canvas>
+      <div id="emptyState" class="hidden absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+        <span class="text-4xl mb-2">📊</span>
+        <p class="text-sm">Nessun dato in questo periodo</p>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100">
+      <div class="text-center">
+        <p class="text-xs text-slate-400 mb-0.5">Minimo</p>
+        <p id="statMin" class="text-base font-bold text-slate-800">—</p>
+      </div>
+      <div class="text-center">
+        <p class="text-xs text-slate-400 mb-0.5">Massimo</p>
+        <p id="statMax" class="text-base font-bold text-slate-800">—</p>
+      </div>
+      <div class="text-center">
+        <p class="text-xs text-slate-400 mb-0.5">Media</p>
+        <p id="statAvg" class="text-base font-bold text-slate-800">—</p>
+      </div>
+      <div class="text-center">
+        <p class="text-xs text-slate-400 mb-0.5">Variazione</p>
+        <p id="statDelta" class="text-base font-bold text-slate-800">—</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Entries card -->
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide">Misurazioni</h2>
+      <a href="/api/export/csv"
+         class="flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        Esporta CSV
+      </a>
+    </div>
+    <div id="entriesList" class="space-y-2">
+      <p class="text-slate-400 text-sm text-center py-4">Caricamento...</p>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ---- Settings injected from server ----
+const SETTINGS = {
+  defaultPeriod: {{ settings.default_period }},
+  movingAvgDays: {{ settings.moving_avg_days }},
+  showTarget: {{ 'true' if settings.show_target else 'false' }},
+  targetWeight: {{ settings.target_weight if settings.target_weight else 'null' }},
+};
+
+// ---- State ----
+let currentPeriod = SETTINGS.defaultPeriod;
+let chart = null;
+let allEntries = [];
+
+// ---- Init ----
+document.addEventListener('DOMContentLoaded', () => {
+  loadData(currentPeriod);
+  updatePeriodButtons(currentPeriod);
+});
+
+// ---- Period ----
+function setPeriod(days) {
+  currentPeriod = days;
+  updatePeriodButtons(days);
+  loadData(days);
+}
+
+function updatePeriodButtons(activeDays) {
+  document.querySelectorAll('.period-btn').forEach(btn => {
+    const d = parseInt(btn.dataset.days);
+    const isActive = d === activeDays;
+    btn.className = `period-btn px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+      isActive
+        ? 'bg-brand-500 text-white shadow-sm'
+        : 'text-slate-600 hover:bg-slate-100'
+    }`;
+  });
+}
+
+// ---- Load data ----
+async function loadData(days) {
+  const url = `/api/weights?days=${days}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Errore caricamento dati');
+    allEntries = await res.json();
+    renderChart(allEntries);
+    renderEntries(allEntries);
+    updateStats(allEntries);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// ---- Chart ----
+function movingAverage(entries, window) {
+  return entries.map((e, i) => {
+    const start = Math.max(0, i - window + 1);
+    const slice = entries.slice(start, i + 1);
+    const avg = slice.reduce((s, x) => s + x.weight, 0) / slice.length;
+    return { x: e.date, y: parseFloat(avg.toFixed(2)) };
+  });
+}
+
+function linearTrend(entries) {
+  if (entries.length < 2) return [];
+  const n = entries.length;
+  const xs = entries.map((_, i) => i);
+  const ys = entries.map(e => e.weight);
+  const sumX  = xs.reduce((a, b) => a + b, 0);
+  const sumY  = ys.reduce((a, b) => a + b, 0);
+  const sumXY = xs.reduce((s, x, i) => s + x * ys[i], 0);
+  const sumX2 = xs.reduce((s, x) => s + x * x, 0);
+  const denom = n * sumX2 - sumX * sumX;
+  if (denom === 0) return [];
+  const slope     = (n * sumXY - sumX * sumY) / denom;
+  const intercept = (sumY - slope * sumX) / n;
+  return entries.map((e, i) => ({
+    x: e.date,
+    y: parseFloat((slope * i + intercept).toFixed(2)),
+  }));
+}
+
+function renderChart(entries) {
+  const canvas = document.getElementById('weightChart');
+  const empty  = document.getElementById('emptyState');
+
+  if (entries.length === 0) {
+    canvas.style.display = 'none';
+    empty.classList.remove('hidden');
+    if (chart) { chart.destroy(); chart = null; }
+    return;
+  }
+  canvas.style.display = 'block';
+  empty.classList.add('hidden');
+
+  const weightData = entries.map(e => ({ x: e.date, y: e.weight }));
+  const maData     = movingAverage(entries, SETTINGS.movingAvgDays);
+  const trendData  = linearTrend(entries);
+
+  const datasets = [
+    {
+      label: 'Peso (kg)',
+      data: weightData,
+      borderColor: '#6366f1',
+      backgroundColor: 'rgba(99,102,241,0.12)',
+      borderWidth: 2.5,
+      pointRadius: entries.length > 60 ? 2 : 4,
+      pointHoverRadius: 6,
+      pointBackgroundColor: '#6366f1',
+      tension: 0.3,
+      fill: true,
+      order: 1,
+    },
+    {
+      label: `Media mobile (${SETTINGS.movingAvgDays}g)`,
+      data: maData,
+      borderColor: '#f59e0b',
+      borderWidth: 2,
+      pointRadius: 0,
+      borderDash: [6, 3],
+      tension: 0.4,
+      fill: false,
+      order: 2,
+    },
+    {
+      label: 'Trend lineare',
+      data: trendData,
+      borderColor: '#ef4444',
+      borderWidth: 1.5,
+      pointRadius: 0,
+      borderDash: [4, 4],
+      tension: 0,
+      fill: false,
+      order: 3,
+    },
+  ];
+
+  if (SETTINGS.showTarget && SETTINGS.targetWeight) {
+    const targetData = entries.length >= 2
+      ? [{ x: entries[0].date, y: SETTINGS.targetWeight }, { x: entries[entries.length - 1].date, y: SETTINGS.targetWeight }]
+      : [];
+    datasets.push({
+      label: `Obiettivo (${SETTINGS.targetWeight} kg)`,
+      data: targetData,
+      borderColor: '#10b981',
+      borderWidth: 1.5,
+      pointRadius: 0,
+      borderDash: [8, 4],
+      tension: 0,
+      fill: false,
+      order: 4,
+    });
+  }
+
+  if (chart) {
+    chart.data.datasets = datasets;
+    chart.update();
+    return;
+  }
+
+  chart = new Chart(canvas, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            boxWidth: 8,
+            font: { size: 11 },
+            color: '#64748b',
+            padding: 16,
+          },
+        },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#94a3b8',
+          bodyColor: '#f1f5f9',
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: {
+            title: items => {
+              const d = new Date(items[0].parsed.x);
+              return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+            },
+            label: item => ` ${item.dataset.label}: ${item.parsed.y} kg`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: {
+            unit: entries.length > 180 ? 'month' : entries.length > 60 ? 'week' : 'day',
+            tooltipFormat: 'yyyy-MM-dd',
+            displayFormats: { day: 'd MMM', week: 'd MMM', month: 'MMM yyyy' },
+          },
+          grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: { color: '#94a3b8', font: { size: 11 } },
+        },
+        y: {
+          grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: {
+            color: '#94a3b8',
+            font: { size: 11 },
+            callback: v => `${v} kg`,
+          },
+        },
+      },
+    },
+  });
+}
+
+// ---- Stats ----
+function updateStats(entries) {
+  if (entries.length === 0) {
+    ['statMin','statMax','statAvg','statDelta'].forEach(id => {
+      document.getElementById(id).textContent = '—';
+    });
+    return;
+  }
+  const ws = entries.map(e => e.weight);
+  const min = Math.min(...ws);
+  const max = Math.max(...ws);
+  const avg = ws.reduce((a, b) => a + b, 0) / ws.length;
+  const delta = entries.length >= 2 ? entries[entries.length - 1].weight - entries[0].weight : 0;
+  const fmt = v => v.toFixed(1) + ' kg';
+
+  document.getElementById('statMin').textContent   = fmt(min);
+  document.getElementById('statMax').textContent   = fmt(max);
+  document.getElementById('statAvg').textContent   = fmt(avg);
+
+  const deltaEl = document.getElementById('statDelta');
+  deltaEl.textContent = (delta >= 0 ? '+' : '') + fmt(delta);
+  deltaEl.className = `text-base font-bold ${delta < 0 ? 'text-emerald-600' : delta > 0 ? 'text-red-500' : 'text-slate-800'}`;
+}
+
+// ---- Entries list ----
+function renderEntries(entries) {
+  const container = document.getElementById('entriesList');
+  if (entries.length === 0) {
+    container.innerHTML = '<p class="text-slate-400 text-sm text-center py-4">Nessuna misurazione in questo periodo.</p>';
+    return;
+  }
+
+  // Show last 30 reversed (most recent first)
+  const recent = [...entries].reverse().slice(0, 30);
+  container.innerHTML = recent.map(e => {
+    const d = new Date(e.date);
+    const dateStr = d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    const timeStr = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    return `
+      <div id="entry-${e.id}" class="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 transition group">
+        <div>
+          <span class="text-sm font-semibold text-slate-800">${e.weight} kg</span>
+          <span class="text-xs text-slate-400 ml-2">${dateStr} · ${timeStr}</span>
+        </div>
+        <button onclick="deleteEntry(${e.id})"
+          class="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition"
+          title="Elimina">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+        </button>
+      </div>`;
+  }).join('');
+}
+
+// ---- Add weight ----
+async function addWeight() {
+  const input  = document.getElementById('weightInput');
+  const errEl  = document.getElementById('addError');
+  const val    = parseFloat(input.value);
+
+  errEl.classList.add('hidden');
+
+  if (isNaN(val) || val < 10 || val > 699) {
+    errEl.textContent = 'Inserisci un valore valido (tra 10 e 699 kg).';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/weights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weight: val }),
+    });
+    if (!res.ok) throw new Error();
+    input.value = '';
+    loadData(currentPeriod);
+  } catch {
+    errEl.textContent = 'Errore durante il salvataggio.';
+    errEl.classList.remove('hidden');
+  }
+}
+
+// Submit on Enter
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('weightInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addWeight();
+  });
+});
+
+// ---- Delete entry ----
+async function deleteEntry(id) {
+  if (!confirm('Eliminare questa misurazione?')) return;
+  try {
+    const res = await fetch(`/api/weights/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error();
+    loadData(currentPeriod);
+  } catch {
+    alert('Errore durante l\'eliminazione.');
+  }
+}
+</script>
+
+{% endblock %}

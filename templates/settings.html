@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Impostazioni — Weight Tracker{% endblock %}
+
+{% block body %}
+
+<!-- Navbar -->
+<nav class="bg-white border-b border-slate-100 sticky top-0 z-10 shadow-sm">
+  <div class="max-w-3xl mx-auto px-4 h-14 flex items-center gap-3">
+    <a href="/dashboard" class="p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+      </svg>
+    </a>
+    <span class="font-bold text-slate-900">Impostazioni</span>
+    <span class="text-slate-400 text-sm ml-auto hidden sm:inline">@{{ user.username }}</span>
+  </div>
+</nav>
+
+<main class="max-w-3xl mx-auto px-4 py-6 space-y-5">
+
+  {% if error %}
+  <div class="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{{ error }}</div>
+  {% endif %}
+  {% if success %}
+  <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700">{{ success }}</div>
+  {% endif %}
+
+  <form method="post" action="/settings" class="space-y-5">
+
+    <!-- Target weight -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">Peso obiettivo</h2>
+
+      <label class="flex items-center justify-between cursor-pointer mb-4">
+        <div>
+          <p class="text-sm font-medium text-slate-700">Mostra linea obiettivo nel grafico</p>
+          <p class="text-xs text-slate-400">Visualizza una linea orizzontale di riferimento</p>
+        </div>
+        <div class="relative">
+          <input type="checkbox" name="show_target" id="showTarget" class="sr-only peer"
+            {% if settings.show_target %}checked{% endif %} />
+          <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-500 transition-colors"></div>
+          <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+        </div>
+      </label>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Peso obiettivo (kg)</label>
+        <div class="relative w-48">
+          <input type="number" name="target_weight" step="0.1" min="10" max="699"
+            value="{{ settings.target_weight if settings.target_weight else '' }}"
+            placeholder="es. 70.0"
+            class="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm transition" />
+          <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium pointer-events-none">kg</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart settings -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">Grafico</h2>
+
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Periodo di default</label>
+          <select name="default_period"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm bg-white transition">
+            <option value="7"   {% if settings.default_period == 7   %}selected{% endif %}>1 settimana</option>
+            <option value="30"  {% if settings.default_period == 30  %}selected{% endif %}>1 mese</option>
+            <option value="90"  {% if settings.default_period == 90  %}selected{% endif %}>3 mesi</option>
+            <option value="180" {% if settings.default_period == 180 %}selected{% endif %}>6 mesi</option>
+            <option value="365" {% if settings.default_period == 365 %}selected{% endif %}>1 anno</option>
+            <option value="0"   {% if settings.default_period == 0   %}selected{% endif %}>Tutto</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Finestra media mobile</label>
+          <select name="moving_avg_days"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm bg-white transition">
+            <option value="3"  {% if settings.moving_avg_days == 3  %}selected{% endif %}>3 giorni</option>
+            <option value="5"  {% if settings.moving_avg_days == 5  %}selected{% endif %}>5 giorni</option>
+            <option value="7"  {% if settings.moving_avg_days == 7  %}selected{% endif %}>7 giorni</option>
+            <option value="14" {% if settings.moving_avg_days == 14 %}selected{% endif %}>14 giorni</option>
+            <option value="30" {% if settings.moving_avg_days == 30 %}selected{% endif %}>30 giorni</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Change password -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">Cambia password</h2>
+      <p class="text-xs text-slate-400 mb-4">Lascia vuoto per non modificare la password.</p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Password attuale</label>
+          <input type="password" name="current_password" autocomplete="current-password"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm transition" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Nuova password</label>
+          <input type="password" name="new_password" autocomplete="new-password" minlength="6"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm transition" />
+          <p class="text-xs text-slate-400 mt-1">Minimo 6 caratteri</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Save button -->
+    <button type="submit"
+      class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition shadow-sm">
+      Salva impostazioni
+    </button>
+
+  </form>
+
+  <!-- Danger zone -->
+  <div class="bg-white rounded-2xl shadow-sm border border-red-100 p-5">
+    <h2 class="text-sm font-semibold text-red-400 uppercase tracking-wide mb-2">Account</h2>
+    <p class="text-xs text-slate-400 mb-3">Tutte le misurazioni verranno eliminate definitivamente.</p>
+    <a href="/login" class="text-sm text-slate-500 hover:underline">← Torna al login</a>
+  </div>
+
+</main>
+
+<!-- Toggle visual fix: make the thumb follow the checkbox -->
+<style>
+  input[type=checkbox].sr-only:checked ~ div > div {
+    transform: translateX(1.25rem);
+  }
+</style>
+
+{% endblock %}
