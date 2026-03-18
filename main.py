@@ -108,6 +108,10 @@ async def register(
         return templates.TemplateResponse("register.html", {
             "request": request, "error": "Password troppo corta (minimo 6 caratteri)."
         })
+    if len(password.encode("utf-8")) > 72:
+        return templates.TemplateResponse("register.html", {
+            "request": request, "error": "Password troppo lunga (massimo 72 caratteri)."
+        })
     if db.query(User).filter(User.username == username).first():
         return templates.TemplateResponse("register.html", {
             "request": request, "error": "Username già in uso."
@@ -182,6 +186,8 @@ async def save_settings(
             error = "Password attuale non corretta."
         elif not new_password or len(new_password) < 6:
             error = "Nuova password troppo corta (minimo 6 caratteri)."
+        elif len(new_password.encode("utf-8")) > 72:
+            error = "Nuova password troppo lunga (massimo 72 caratteri)."
         else:
             user.password_hash = hash_password(new_password)
             success = "Impostazioni e password aggiornate."
